@@ -10,6 +10,7 @@ models/
 models.zip
 dataset/
 dataset.zip
+checkpoint_*/
 # Distribution / packaging
 .Python
 build/
