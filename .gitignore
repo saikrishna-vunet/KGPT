@@ -5,8 +5,11 @@ __pycache__/
 
 # C extensions
 *.so
+# project outputs
 models/
 models.zip
+dataset/
+dataset.zip
 # Distribution / packaging
 .Python
 build/
