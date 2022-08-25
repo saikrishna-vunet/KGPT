@@ -1,4 +1,4 @@
-FOLDER='/data/wenhu/entity2text'
+FOLDER=$(pwd)
 GPUS=$1
 RESUME=$2
 percent=$3
