@@ -9,19 +9,22 @@ import re
 import copy
 from torch.utils.data import Dataset
 
+
 def safe_setting(matrix, x_start, x_end, y_start, y_end):
     if x_start >= matrix.shape[0] or y_start >= matrix.shape[0]:
         return
 
-    matrix[x_start:min(matrix.shape[0], x_end), y_start:min(matrix.shape[1], y_end)] = 1
+    matrix[x_start:min(matrix.shape[0], x_end),
+           y_start:min(matrix.shape[1], y_end)] = 1
     return
+
 
 class KBDataset(Dataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact, forbid_duplicate_relation=True, percent=1.0):
         super(KBDataset, self).__init__()
         with open(file_path, 'r') as f:
             self.data = json.load(f)
-        
+
         if percent > 1:
             self.data = self.data[:int(percent)]
         else:
@@ -35,16 +38,20 @@ class KBDataset(Dataset):
 
     def linearize_v2(self, entity, lower_case=False):
         if lower_case:
-            string = self.tokenizer.encode('[ENT] {}'.format(entity[0].lower()), add_special_tokens=False)
+            string = self.tokenizer.encode('[ENT] {}'.format(
+                entity[0].lower()), add_special_tokens=False)
         else:
-            string = self.tokenizer.encode('[ENT] {}'.format(entity[0]), add_special_tokens=False)
+            string = self.tokenizer.encode(
+                '[ENT] {}'.format(entity[0]), add_special_tokens=False)
         triple_id = [1] * len(string)
 
         if lower_case:
-            words = self.tokenizer.encode('[TRIPLE] [PRED] description [SUB] {} [TRIPLE]'.format(entity[1].lower()), add_special_tokens=False)
+            words = self.tokenizer.encode('[TRIPLE] [PRED] description [SUB] {} [TRIPLE]'.format(
+                entity[1].lower()), add_special_tokens=False)
         else:
-            words = self.tokenizer.encode('[TRIPLE] [PRED] description [SUB] {} [TRIPLE]'.format(entity[1]), add_special_tokens=False)
-            
+            words = self.tokenizer.encode('[TRIPLE] [PRED] description [SUB] {} [TRIPLE]'.format(
+                entity[1]), add_special_tokens=False)
+
         string += words
         triple_id += [triple_id[-1] + 1] * len(words)
 
@@ -54,18 +61,19 @@ class KBDataset(Dataset):
                 pass
             else:
                 if lower_case:
-                    words = self.tokenizer.encode('[PRED] {} [SUB] {} [TRIPLE]'.format(rel[0].lower(), rel[1].lower()), add_special_tokens=False)
+                    words = self.tokenizer.encode('[PRED] {} [SUB] {} [TRIPLE]'.format(
+                        rel[0].lower(), rel[1].lower()), add_special_tokens=False)
                 else:
-                    words = self.tokenizer.encode('[PRED] {} [SUB] {} [TRIPLE]'.format(rel[0], rel[1]), add_special_tokens=False)                    
+                    words = self.tokenizer.encode('[PRED] {} [SUB] {} [TRIPLE]'.format(
+                        rel[0], rel[1]), add_special_tokens=False)
                 string += words
                 triple_id += [triple_id[-1] + 1] * len(words)
                 added.add(rel[0])
-            
+
             if len(added) >= self.max_fact:
                 break
-        
-        return string, triple_id
 
+        return string, triple_id
 
     def __len__(self):
         return len(self.data)
@@ -76,11 +84,13 @@ class KBDataset(Dataset):
 
 class WikiDataDataset(KBDataset):
     def __init__(self, file_path, knowledge_path, tokenizer, max_entity, max_fact=12, max_enc_len=1024, max_dec_len=50, encoder=None, lower_case=False):
-        super(WikiDataDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, True)
+        super(WikiDataDataset, self).__init__(
+            file_path, tokenizer, max_entity, max_fact, True)
         with open(knowledge_path, 'r') as f:
             self.knowledge = json.load(f)
 
-        print("Total samples = {}; Total entities = {}".format(len(self.data), len(self.knowledge)))
+        print("Total samples = {}; Total entities = {}".format(
+            len(self.data), len(self.knowledge)))
         self.max_enc_len = max_enc_len
         self.max_dec_len = max_dec_len
         self.lower_case = lower_case
@@ -123,9 +133,9 @@ class WikiDataDataset(KBDataset):
 
             if 'title' in entry:
                 entity = self.knowledge[entry['title_kb_id']]
-                
+
                 string, triple_id = self.linearize_v2(entity, self.lower_case)
-                
+
                 strings += string
                 entity_ids += [0] * len(string)
                 triple_ids += triple_id
@@ -135,7 +145,7 @@ class WikiDataDataset(KBDataset):
                     break
 
                 entity = self.knowledge[entity_id]
-                
+
                 string, triple_id = self.linearize_v2(entity, self.lower_case)
 
                 strings += string
@@ -143,30 +153,38 @@ class WikiDataDataset(KBDataset):
                 triple_ids += triple_id
 
             position_ids = list(range(len(strings)))
-            assert len(strings) == len(entity_ids) == len(triple_ids) == len(position_ids)
+            assert len(strings) == len(entity_ids) == len(
+                triple_ids) == len(position_ids)
 
             if len(strings) >= self.max_enc_len:
                 input_ids = torch.LongTensor(strings[:self.max_enc_len])
                 entity_ids = torch.LongTensor(entity_ids[:self.max_enc_len])
                 triple_ids = torch.LongTensor(triple_ids[:self.max_enc_len])
-                position_ids = torch.LongTensor(position_ids[:self.max_enc_len])
+                position_ids = torch.LongTensor(
+                    position_ids[:self.max_enc_len])
             else:
-                input_ids = torch.LongTensor(strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
-                entity_ids = torch.LongTensor(entity_ids + [0] * (self.max_enc_len - len(strings)))
-                triple_ids = torch.LongTensor(triple_ids + [0] * (self.max_enc_len - len(strings)))
-                position_ids = torch.LongTensor(position_ids + [0] * (self.max_enc_len - len(strings)))
+                input_ids = torch.LongTensor(
+                    strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
+                entity_ids = torch.LongTensor(
+                    entity_ids + [0] * (self.max_enc_len - len(strings)))
+                triple_ids = torch.LongTensor(
+                    triple_ids + [0] * (self.max_enc_len - len(strings)))
+                position_ids = torch.LongTensor(
+                    position_ids + [0] * (self.max_enc_len - len(strings)))
 
-            sentence = self.tokenizer.encode('[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
+            sentence = self.tokenizer.encode(
+                '[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
             if len(sentence) >= self.max_dec_len:
                 output_ids = torch.LongTensor(sentence[:self.max_dec_len])
             else:
-                output_ids = torch.LongTensor(sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
+                output_ids = torch.LongTensor(
+                    sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
 
             return input_ids, entity_ids, triple_ids, position_ids, output_ids[:-1], output_ids[1:]
 
         elif self.encoder == 'graph':
             strings = []
-            
+
             term_level_mask = torch.eye(self.max_enc_len).bool()
             triple_level_mask = torch.eye(self.max_enc_len).bool()
             entity_level_mask = torch.eye(self.max_enc_len).bool()
@@ -178,7 +196,7 @@ class WikiDataDataset(KBDataset):
             if 'title' in entry:
                 entities.insert(0, entry['title_kb_id'])
 
-            for i, entity_id in enumerate(entities):                
+            for i, entity_id in enumerate(entities):
                 if i >= self.max_entity:
                     break
 
@@ -190,23 +208,27 @@ class WikiDataDataset(KBDataset):
 
                 entity[2].insert(0, ['description', entity[1]])
                 triple_positions = []
-                added = set()        
+                added = set()
                 for rel in entity[2]:
                     if offset >= self.max_enc_len - 1:
                         break
                     elif self.forbid_duplicate_relation and rel[0] in added:
                         continue
-                    else:             
-                        words = self.tokenizer.encode('[TRIPLE]', add_special_tokens=False)
+                    else:
+                        words = self.tokenizer.encode(
+                            '[TRIPLE]', add_special_tokens=False)
                         triple_positions.append(offset)
                         string += words
                         offset += len(words)
 
-                        words = self.tokenizer.encode('{} [PRED] {} [SUB] {}'.format(entity[0], rel[0], rel[1]), add_special_tokens=False)
+                        words = self.tokenizer.encode('{} [PRED] {} [SUB] {}'.format(
+                            entity[0], rel[0], rel[1]), add_special_tokens=False)
                         string += words
-                        safe_setting(term_level_mask, offset, offset + len(words), offset, offset + len(words))
+                        safe_setting(term_level_mask, offset, offset +
+                                     len(words), offset, offset + len(words))
                         offset += len(words)
-                        safe_setting(triple_level_mask, triple_positions[-1], triple_positions[-1] + 1, triple_positions[-1] + 1, offset)
+                        safe_setting(
+                            triple_level_mask, triple_positions[-1], triple_positions[-1] + 1, triple_positions[-1] + 1, offset)
 
                         added.add(rel[0])
 
@@ -224,20 +246,25 @@ class WikiDataDataset(KBDataset):
                 fact_level_mask[entity_position, entity_positions] = 1
 
             for i in range(len(entity_positions) - 1):
-                gather_level_mask[entity_positions[i] + 1 : entity_positions[i + 1], entity_positions] = 1
-            gather_level_mask[entity_positions[-1] + 1:offset, entity_positions] = 1
+                gather_level_mask[entity_positions[i] +
+                                  1: entity_positions[i + 1], entity_positions] = 1
+            gather_level_mask[entity_positions[-1] +
+                              1:offset, entity_positions] = 1
 
             if len(strings) >= self.max_enc_len:
                 input_ids = torch.LongTensor(strings[:self.max_enc_len])
             else:
-                input_ids = torch.LongTensor(strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
-                
-            sentence = self.tokenizer.encode('[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
+                input_ids = torch.LongTensor(
+                    strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
+
+            sentence = self.tokenizer.encode(
+                '[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
             if len(sentence) >= self.max_dec_len:
                 output_ids = torch.LongTensor(sentence[:self.max_dec_len])
             else:
-                output_ids = torch.LongTensor(sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
-                
+                output_ids = torch.LongTensor(
+                    sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
+
             term_level_mask = ~term_level_mask
             triple_level_mask = ~triple_level_mask
             entity_level_mask = ~entity_level_mask
@@ -245,14 +272,15 @@ class WikiDataDataset(KBDataset):
             gather_level_mask = ~gather_level_mask
 
             return input_ids, term_level_mask, triple_level_mask, entity_level_mask, fact_level_mask, gather_level_mask, output_ids[:-1], output_ids[1:]
-        
+
         else:
-            raise NotImplementedError        
+            raise NotImplementedError
 
 
 class DownStreamDataset(KBDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=None, forbid_duplicate_relation=True, percent=1.0):
-        super(DownStreamDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, forbid_duplicate_relation, percent)
+        super(DownStreamDataset, self).__init__(file_path, tokenizer,
+                                                max_entity, max_fact, forbid_duplicate_relation, percent)
 
         print("Total samples = {}".format(len(self.data)))
         self.max_enc_len = max_enc_len
@@ -294,30 +322,38 @@ class DownStreamDataset(KBDataset):
                 triple_ids += triple_id
 
             position_ids = list(range(len(strings)))
-            assert len(strings) == len(entity_ids) == len(triple_ids) == len(position_ids)
+            assert len(strings) == len(entity_ids) == len(
+                triple_ids) == len(position_ids)
 
             if len(strings) >= self.max_enc_len:
                 input_ids = torch.LongTensor(strings[:self.max_enc_len])
                 entity_ids = torch.LongTensor(entity_ids[:self.max_enc_len])
                 triple_ids = torch.LongTensor(triple_ids[:self.max_enc_len])
-                position_ids = torch.LongTensor(position_ids[:self.max_enc_len])
+                position_ids = torch.LongTensor(
+                    position_ids[:self.max_enc_len])
             else:
-                input_ids = torch.LongTensor(strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
-                entity_ids = torch.LongTensor(entity_ids + [0] * (self.max_enc_len - len(strings)))
-                triple_ids = torch.LongTensor(triple_ids + [0] * (self.max_enc_len - len(strings)))
-                position_ids = torch.LongTensor(position_ids + [0] * (self.max_enc_len - len(strings)))
+                input_ids = torch.LongTensor(
+                    strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
+                entity_ids = torch.LongTensor(
+                    entity_ids + [0] * (self.max_enc_len - len(strings)))
+                triple_ids = torch.LongTensor(
+                    triple_ids + [0] * (self.max_enc_len - len(strings)))
+                position_ids = torch.LongTensor(
+                    position_ids + [0] * (self.max_enc_len - len(strings)))
 
-            sentence = self.tokenizer.encode('[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
+            sentence = self.tokenizer.encode(
+                '[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
             if len(sentence) >= self.max_dec_len:
                 output_ids = torch.LongTensor(sentence[:self.max_dec_len])
             else:
-                output_ids = torch.LongTensor(sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
+                output_ids = torch.LongTensor(
+                    sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
 
             return input_ids, entity_ids, triple_ids, position_ids, output_ids[:-1], output_ids[1:]
 
         elif self.encoder == 'graph':
             strings = []
-            
+
             term_level_mask = torch.eye(self.max_enc_len).bool()
             triple_level_mask = torch.eye(self.max_enc_len).bool()
             entity_level_mask = torch.eye(self.max_enc_len).bool()
@@ -344,17 +380,21 @@ class DownStreamDataset(KBDataset):
                         break
                     elif self.forbid_duplicate_relation and rel[0] in added:
                         continue
-                    else:             
-                        words = self.tokenizer.encode('[TRIPLE]', add_special_tokens=False)
+                    else:
+                        words = self.tokenizer.encode(
+                            '[TRIPLE]', add_special_tokens=False)
                         triple_positions.append(offset)
                         string += words
                         offset += len(words)
 
-                        words = self.tokenizer.encode('{} [PRED] {} [SUB] {}'.format(entity[0], rel[0], rel[1]), add_special_tokens=False)
+                        words = self.tokenizer.encode('{} [PRED] {} [SUB] {}'.format(
+                            entity[0], rel[0], rel[1]), add_special_tokens=False)
                         string += words
-                        safe_setting(term_level_mask, offset, offset + len(words), offset, offset + len(words))
+                        safe_setting(term_level_mask, offset, offset +
+                                     len(words), offset, offset + len(words))
                         offset += len(words)
-                        safe_setting(triple_level_mask, triple_positions[-1], triple_positions[-1] + 1, triple_positions[-1] + 1, offset)
+                        safe_setting(
+                            triple_level_mask, triple_positions[-1], triple_positions[-1] + 1, triple_positions[-1] + 1, offset)
 
                         added.add(rel[0])
 
@@ -372,59 +412,76 @@ class DownStreamDataset(KBDataset):
                 fact_level_mask[entity_position, entity_positions] = 1
 
             for i in range(len(entity_positions) - 1):
-                gather_level_mask[entity_positions[i] + 1 : entity_positions[i + 1], entity_positions] = 1
-            gather_level_mask[entity_positions[-1] + 1:offset, entity_positions] = 1
+                gather_level_mask[entity_positions[i] +
+                                  1: entity_positions[i + 1], entity_positions] = 1
+            gather_level_mask[entity_positions[-1] +
+                              1:offset, entity_positions] = 1
 
             if len(strings) >= self.max_enc_len:
                 input_ids = torch.LongTensor(strings[:self.max_enc_len])
             else:
-                input_ids = torch.LongTensor(strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
-                
-            sentence = self.tokenizer.encode('[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
+                input_ids = torch.LongTensor(
+                    strings + [self.pad_idx] * (self.max_enc_len - len(strings)))
+
+            sentence = self.tokenizer.encode(
+                '[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
             if len(sentence) >= self.max_dec_len:
                 output_ids = torch.LongTensor(sentence[:self.max_dec_len])
             else:
-                output_ids = torch.LongTensor(sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
+                output_ids = torch.LongTensor(
+                    sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
 
             term_level_mask = ~term_level_mask
             triple_level_mask = ~triple_level_mask
             entity_level_mask = ~entity_level_mask
             fact_level_mask = ~fact_level_mask
             gather_level_mask = ~gather_level_mask
-            
+
             return input_ids, term_level_mask, triple_level_mask, entity_level_mask, fact_level_mask, gather_level_mask, output_ids[:-1], output_ids[1:]
-        
+
         else:
             raise NotImplementedError
 
+
 class WebNLGDataset(DownStreamDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=False, percent=1.0):
-        super(WebNLGDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+        super(WebNLGDataset, self).__init__(file_path, tokenizer, max_entity,
+                                            max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+
 
 class WebNLGChallengeDataset(DownStreamDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=False, percent=1.0):
-        super(WebNLGChallengeDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+        super(WebNLGChallengeDataset, self).__init__(file_path, tokenizer,
+                                                     max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+
 
 class E2ENLGDataset(DownStreamDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=False, percent=1.0):
-        super(E2ENLGDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+        super(E2ENLGDataset, self).__init__(file_path, tokenizer, max_entity,
+                                            max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+
 
 class LogicNLGDataset(DownStreamDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=False, percent=1.0):
-        super(LogicNLGDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, max_enc_len, max_dec_len, encoder, False, percent)
+        super(LogicNLGDataset, self).__init__(file_path, tokenizer, max_entity,
+                                              max_fact, max_enc_len, max_dec_len, encoder, False, percent)
+
 
 class WikiBioNLGDataset(DownStreamDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, encoder=False, percent=1.0):
-        super(WikiBioNLGDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+        super(WikiBioNLGDataset, self).__init__(file_path, tokenizer,
+                                                max_entity, max_fact, max_enc_len, max_dec_len, encoder, True, percent)
+
 
 class GPTDataset(KBDataset):
     def __init__(self, file_path, tokenizer, max_entity, max_fact=12, max_enc_len=128, max_dec_len=30, percent=1.0):
-        super(GPTDataset, self).__init__(file_path, tokenizer, max_entity, max_fact, percent=percent)
+        super(GPTDataset, self).__init__(file_path, tokenizer,
+                                         max_entity, max_fact, percent=percent)
         print("Total samples = {}".format(len(self.data)))
         self.pad_idx = tokenizer.pad_token_id
         self.max_enc_len = max_enc_len
         self.max_dec_len = max_dec_len
-    
+
     def get_reference(self, idx):
         return [_.split(' ') for _ in self.data[idx]['text']]
 
@@ -443,12 +500,12 @@ class GPTDataset(KBDataset):
             entity = KBs[entity_label]
 
             name = entity[0]
-            
+
             for rel in entity[-1]:
                 strings += ' {} {} {} . '.format(name, rel[0], rel[1])
 
         KB_ids = self.tokenizer.encode(strings, add_special_tokens=False)
-        
+
         if len(KB_ids) < self.max_enc_len:
             KB_ids = [self.pad_idx] * (self.max_enc_len - len(KB_ids)) + KB_ids
         else:
@@ -456,10 +513,12 @@ class GPTDataset(KBDataset):
 
         inputs = torch.LongTensor(KB_ids)
 
-        sentence = self.tokenizer.encode('[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
+        sentence = self.tokenizer.encode(
+            '[SOS] {} [EOS]'.format(sentence), add_special_tokens=False)
         if len(sentence) >= self.max_dec_len:
             output_ids = torch.LongTensor(sentence[:self.max_dec_len])
         else:
-            output_ids = torch.LongTensor(sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
+            output_ids = torch.LongTensor(
+                sentence[:self.max_dec_len] + [self.pad_idx] * (self.max_dec_len - len(sentence)))
 
         return inputs, output_ids[:-1], output_ids[1:]
